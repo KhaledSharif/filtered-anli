@@ -1,0 +1,9 @@
+2-aflite:
+  phi: 'Location to load the embeddings'
+  L: 'linear'
+  m: 64
+  t: 40000
+  tau: 0.75
+  k: 10000
+  n: 6400000
+  output: 'Location to output the filter'
