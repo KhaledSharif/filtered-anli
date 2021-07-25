@@ -109,8 +109,8 @@ def load_embeddings(dataset, batch = 100):
 
 if __name__ == '__main__':
 
-    save_embeddings("R1", 220)
-    x = load_embeddings("R1", 220)
+    save_embeddings("R1")
+    x = load_embeddings("R1")
     # print(x)
 
 
