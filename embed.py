@@ -5,7 +5,7 @@ import time
 import numpy as np
 import math
 
-def save_embeddings(dataset):
+def save_embeddings(dataset, batch = 100):
 
     # input:
     #       dataset = "R1" or "R2" or "R3"
@@ -38,12 +38,12 @@ def save_embeddings(dataset):
     tokenizer = AutoTokenizer.from_pretrained(hg_model_hub_name)
     model = AutoModelForSequenceClassification.from_pretrained(hg_model_hub_name)
 #
-    m = math.ceil(len(train.index)/100)
+    m = math.ceil(len(train.index)/batch)
     print("Number of batches of embeddings to produce for this dataset:", m)
 
     for i in np.arange(m):
         embedding = []
-        for j in np.arange(i*100, min(i*100 + 100, len(train.index))):
+        for j in np.arange(i*batch, min(i*batch + batch, len(train.index))):
             tokenized_input_seq_pair = tokenizer.encode_plus(context[j], hypothesis[j],
                                                          max_length=max_length,
                                                          return_token_type_ids=True, truncation=True)
@@ -58,19 +58,21 @@ def save_embeddings(dataset):
             # print(outputs[0][0].detach().numpy())
             embedding.append(outputs[0][0].detach().numpy())
         np.save(outputpath+str(i), embedding)
-        print("Saved batch", i, "of size", len(embedding), "in the ./embedding_files directory. So far", min(i * 100 + 100, len(train.index)), "examples saved...")
+        print("Saved batch", i, "of size", len(embedding), "in the ./embedding_files directory. So far", min(i * batch + batch, len(train.index)), "examples saved...")
         # print(embedding)
 
     end = time.time()
     print("Total embedding time for the dataset:", end - start, "seconds")
 
-def load_embeddings(dataset):
+def load_embeddings(dataset, batch = 100):
 
     # to be ran with all the batch-i.npy files populated in the embeddingfiles/Rx/ directory.
-    # input: "R1" or "R2" or "R3"
+    # input:
+    #       dataset: "R1" or "R2" or "R3"
     #                 if R1 there should be 170 .npy files, i.e., 0 ~ 169 inclusive
     #                 if R2 there should be 455 .npy files
     #                 if R3 there should be 1005 .npy files
+    #       batch: the number of batch size used for save embeddings, using 100 for this project by def.
     # output: returns a list of 1d np.arrays
 
     assert dataset == "R1" or "R2" or "R3", "only R1 or R2 or R3 allowed"
@@ -85,13 +87,13 @@ def load_embeddings(dataset):
         samplesize = 100459
         loadpath = "./embedding_files/R3/batch-"
 
-    m = math.ceil(samplesize/100)
+    m = math.ceil(samplesize/batch)
 
     embeddings = []
 
     print("loading ", m, " batches of embedding into a single list")
 
-    for i in np.arange(m):
+    for i in np.arange(5):
         batch_embeddings = np.load(loadpath+str(i)+".npy")
         embeddings.append(batch_embeddings)
         print("Batch", i, "loaded..")
@@ -107,8 +109,8 @@ def load_embeddings(dataset):
 
 if __name__ == '__main__':
 
-    save_embeddings("R3")
-    x = load_embeddings("R3")
+    save_embeddings("R1", 220)
+    x = load_embeddings("R1", 220)
     # print(x)
 
 
