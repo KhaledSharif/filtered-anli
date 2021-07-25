@@ -1,11 +1,14 @@
 """
 AFLite implements the AFLite (Algorithm 1) in https://arxiv.org/pdf/2002.04108.pdf
-Run `pip install pyyaml` before running this script
+Run `pip install pyyaml scikit-learn` before running this script
 """
+from numpy.core.fromnumeric import sort
 import torch
 import yaml
+import numpy as np
+from sklearn import svm
 
-def AFLite(phi, L, n, m, t, k, tau, output):
+def AFLite(phi, L, n, m, t, k, tau, output, use_numpy=False):
     """
     Input:
         phi: string path to load the data from.
@@ -25,14 +28,97 @@ def AFLite(phi, L, n, m, t, k, tau, output):
     """
     print(f'Loading data from "{phi}" and output to "{output}"')
     print(f'Model = {L}, n={n}, m={m}, t={t}, k={k}, tau={tau}')
-    print('done')
+    # load dataset represented as a pytorch dataset
+    phi = torch.load(phi)   
+    print(f'Loaded Phi={phi.shape}')
+    assert n < phi.shape[0], f'Loaded dataset size must be greater than target dataset size, got n {n} >= X {phi.shape[0]}'
+    assert t < phi.shape[0], f'Loaded dataset size must be greater than training dataset size, got t {t} >= X {phi.shape[0]}'
+    assert n == 0 or t < n, f'n must be 0 or training dataset size must be smaller than target dataset size, got t {t} >= n {n}'
+    assert n == 0 or k <= n, f'n must be 0 or slice size must be smaller or equal to target dataset size, got k {k} > n {n}'
+    # Augment the input matrix with original indices.
+    position = torch.arange(0, phi.shape[0], dtype=torch.int).unsqueeze(1)
+    S = torch.cat((phi, position), 1)
+    # S contains [features..., label, original row index]
+
+    itr_count = 0
+    while S.shape[0] > n:
+        print(f'Iteration {itr_count}, size {S.shape[0]}')
+        itr_count += 1
+
+        # Any row not getting selected will have a predictability score of 0.
+        E = cross_validation(L, S, t, m, use_numpy, monte_carlo=True)
+        assert E.shape[0] == S.shape[0]
+        before = S.shape[0]
+        sortedE, indice = torch.sort(E)  # we rank the instances according to their predictability score
+        mask = (sortedE < tau)  # we remove the top-k instances whose score is not less than the early-stoppipng threshold tau.
+        mask[:-k] = True  # we keep the ones up to the last k instances
+        S = S[indice[mask]]  
+        if before - S.shape[0] < k:
+            print(f'Iteration {itr_count}, size reduction {before - S.shape[0]} is smaller than k {k}, break')
+            break
+
+    out = torch.zeros((phi.shape[0],), dtype=torch.bool)
+    out[S[:,-1].long()] = True
+    torch.save(out, output)
+    print(f'Iteration {itr_count}, final size is {S.shape[0]}')
     pass
+
+def cross_validation(L, S: torch.Tensor, t: int, m: int, use_numpy=False, monte_carlo=True):
+    # split the training set randomly into two parts
+    if use_numpy:
+        S = S.numpy()
+    else:
+        raise Exception('Not implemented yet')
+
+    # (number of time it gets right, number of time it gets selected)
+    E = torch.zeros((S.shape[0], 2), dtype=torch.float)
+    if monte_carlo:
+        for j in range(m):  # We can parallize this
+            print(f"partition iteration {j}")
+            rand_indices = torch.randperm(S.shape[0])
+            indices = torch.arange(0, S.shape[0], dtype=torch.long)[rand_indices]
+            S = S[rand_indices]
+            if use_numpy:
+                # randomly split S into 2
+                Tj, S_Tj = S[:S.shape[0] - t], S[S.shape[0] - t:]
+                selected_for_prediction = indices[:S.shape[0] - t]
+                assert Tj.shape[0] == S.shape[0] - t
+                assert S_Tj.shape[0] == t
+                # prepare validation and training input and labels
+                X_S_Tj, Y_S_Tj = S_Tj[:,:-2], S_Tj[:,-2].astype(np.int8)
+                X_Tj, Y_Tj = Tj[:,:-2], Tj[:,-2].astype(np.int8)
+                # L computes the correct matrix containing boolean of correct predictions in validation set.
+                correct = L(X_S_Tj, Y_S_Tj, X_Tj, Y_Tj)
+                assert correct.shape[0] == Tj.shape[0]
+                # Correct prediction is 1 while incorrect is 0, we increase them.
+                E[selected_for_prediction, 0] += correct.astype(np.int8)
+                E[selected_for_prediction, 1] += 1
+    else:
+        raise Exception('Not implemented yet')
+
+    selected = E[:,1] != 0  # avoid NAN, any unselected data point will receive 0.
+    E[selected, 0] = E[selected, 0] / E[selected, 1]
+    return E[:,0]
+
+def _svm(X, y, X_validation, y_validation):
+    clf = svm.SVC()
+    clf.fit(X, y)
+    pred = clf.predict(X_validation)
+    return (pred == y_validation)
+
+models = {
+    'SVM': _svm,
+}
+
+models_numpy = {
+    'SVM': True,
+}
 
 def run():
     with open('config.yaml', 'r') as y:
         config = {
             'phi': 'Location to load the embeddings',
-            'L': 'linear',
+            'L': 'SVM',
             'm': 64,
             't': 40000,
             'tau': 0.75,
@@ -41,15 +127,12 @@ def run():
             'output': 'Location to output the filter',
         }
 
-        models = {
-            'linear': torch.nn.Linear,
-        }
-
         for k, v in yaml.safe_load(y)['2-aflite'].items():
             config[k] = v
 
         model = models[config['L']]
-        AFLite(config['phi'], model, config['n'], config['m'], config['t'], config['k'], config['tau'], config['output'])
+        AFLite(config['phi'], model, config['n'], config['m'], config['t'], config['k'],
+            config['tau'], config['output'], use_numpy=models_numpy[config['L']])
 
 if __name__ == '__main__':
     run()
