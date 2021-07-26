@@ -8,6 +8,10 @@ import yaml
 import numpy as np
 from sklearn import svm
 
+# We can train Pytorch model with GPU
+DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+print(f"Using Device {DEVICE} For Pytorch computations")
+
 def AFLite(phi, L, n, m, t, k, tau, output, use_numpy=False):
     """
     Input:
@@ -58,7 +62,7 @@ def AFLite(phi, L, n, m, t, k, tau, output, use_numpy=False):
             break
 
     out = torch.zeros((phi.shape[0],), dtype=torch.bool)
-    out[S[:,-1].long()] = True
+    out[S[:,-1].long()] = True  # Only remaining stuff in S will be used for the next step.
     torch.save(out, output)
     print(f'Iteration {itr_count}, final size is {S.shape[0]}')
     pass
@@ -68,10 +72,13 @@ def cross_validation(L, S: torch.Tensor, t: int, m: int, use_numpy=False, monte_
     if use_numpy:
         S = S.numpy()
     else:
-        raise Exception('Not implemented yet')
+        S = S.to(DEVICE)
 
     # (number of time it gets right, number of time it gets selected)
     E = torch.zeros((S.shape[0], 2), dtype=torch.float)
+    if not use_numpy:
+        E = E.to(DEVICE)
+
     if monte_carlo:
         for j in range(m):  # We can parallize this
             print(f"partition iteration {j}")
@@ -93,6 +100,15 @@ def cross_validation(L, S: torch.Tensor, t: int, m: int, use_numpy=False, monte_
                 # Correct prediction is 1 while incorrect is 0, we increase them.
                 E[selected_for_prediction, 0] += correct.astype(np.int8)
                 E[selected_for_prediction, 1] += 1
+            else:
+                Tj, S_Tj = torch.split(S, (S.shape[0] - t, t))
+                # Tj is validation set, S_Tj is training set
+                selected_for_prediction = indices[:S.shape[0] - t]
+                X_S_Tj, Y_S_Tj = S_Tj[:,:-2], S_Tj[:,-2].long()
+                X_Tj, Y_Tj = Tj[:,:-2], Tj[:,-2].long()
+                correct = L(X_S_Tj, Y_S_Tj, X_Tj, Y_Tj)
+                E[selected_for_prediction, 0] += correct.int()
+                E[selected_for_prediction, 1] += 1
     else:
         raise Exception('Not implemented yet')
 
@@ -101,17 +117,41 @@ def cross_validation(L, S: torch.Tensor, t: int, m: int, use_numpy=False, monte_
     return E[:,0]
 
 def _svm(X, y, X_validation, y_validation):
-    clf = svm.SVC()
+    clf = svm.SVC()  # default kernel = RBF
     clf.fit(X, y)
     pred = clf.predict(X_validation)
     return (pred == y_validation)
 
+def _linearSGD(X, y, X_validation, y_validation):
+    unique = torch.unique(y)
+    classes = unique.shape[0]
+    model = torch.nn.Linear(X.shape[1], classes).to(DEVICE)
+
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.1, momentum=0.9)
+    criterion = torch.nn.CrossEntropyLoss()  # this contains a LogSoftmax step
+    epoch = 10
+    for _ in range(epoch):
+        # todo: potentially make batching to improve learning.
+        optimizer.zero_grad()
+        outputs = model(X)
+        loss = criterion(outputs, y)
+        loss.backward()
+        optimizer.step()
+    
+    with torch.no_grad():
+        outputs = model(X_validation)
+        _, predicted = torch.max(outputs.data, 1)
+        return (predicted == y_validation)
+
+
 models = {
     'SVM': _svm,
+    'LinearSGD': _linearSGD,
 }
 
 models_numpy = {
     'SVM': True,
+    'LinearSGD': False,
 }
 
 def run():
