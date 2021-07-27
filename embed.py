@@ -1,4 +1,4 @@
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
+from transformers import AutoTokenizer, AutoModelForSequenceClassification, AutoConfig
 import torch
 import pandas as pd
 import time
@@ -36,12 +36,14 @@ def save_embeddings(dataset, batch = 100):
 
     hg_model_hub_name = "ynie/roberta-large-snli_mnli_fever_anli_R1_R2_R3-nli"
     tokenizer = AutoTokenizer.from_pretrained(hg_model_hub_name)
-    model = AutoModelForSequenceClassification.from_pretrained(hg_model_hub_name)
+    config = AutoConfig.from_pretrained(hg_model_hub_name,
+                                        output_hidden_states=True)
+    model = AutoModelForSequenceClassification.from_pretrained(hg_model_hub_name, config = config)
 #
     m = math.ceil(len(train.index)/batch)
     print("Number of batches of embeddings to produce for this dataset:", m)
 
-    for i in np.arange(m):
+    for i in np.arange(2):
         embedding = []
         for j in np.arange(i*batch, min(i*batch + batch, len(train.index))):
             tokenized_input_seq_pair = tokenizer.encode_plus(context[j], hypothesis[j],
@@ -55,7 +57,7 @@ def save_embeddings(dataset, batch = 100):
                         attention_mask=attention_mask,
                         token_type_ids=token_type_ids,
                         labels=None)
-            # print(outputs[0][0].detach().numpy())
+            print((outputs[1][-1]).shape) #25 hidden layers
             embedding.append(outputs[0][0].detach().numpy())
         np.save(outputpath+str(i), embedding)
         print("Saved batch", i, "of size", len(embedding), "in the ./embedding_files directory. So far", min(i * batch + batch, len(train.index)), "examples saved...")
