@@ -11,7 +11,7 @@ from flint.data_utils.fields import RawFlintField, LabelFlintField, ArrayIndexFl
 from utils import common, list_dict_data_tool, save_tool
 from nli.training import MODEL_CLASSES, registered_path, build_eval_dataset_loader_and_sampler, NLITransform, \
     NLIDataset, count_acc, evaluation_dataset, eval_model
-
+import sys
 import torch
 
 import pprint
@@ -84,6 +84,7 @@ def evaluation():
 
     batch_size_per_gpu_eval = args.per_gpu_eval_batch_size
 
+    print(f"EVAL DATA {args.eval_data}")
     eval_data_str = args.eval_data
     eval_data_name = []
     eval_data_path = []
@@ -134,19 +135,21 @@ def evaluation():
 
         evaluation_dataset(args, cur_eval_dataloader, cur_eval_data_list, model, r_dict,
                            eval_name=cur_eval_data_name)
+        #print(f"EVAL ACCURACY ON {cur_eval_data_name}: {r_dict[cur_eval_data_name]['acc']}")
 
-    # save prediction:
-    if args.output_prediction_path is not None:
-        cur_results_path = Path(args.output_prediction_path)
-        if not cur_results_path.exists():
-            cur_results_path.mkdir(parents=True)
-        for key, item in r_dict.items():
-            common.save_jsonl(item['predictions'], cur_results_path / f"{key}.jsonl")
 
-        # avoid saving too many things
-        for key, item in r_dict.items():
-            del r_dict[key]['predictions']
-        common.save_json(r_dict, cur_results_path / "results_dict.json", indent=2)
+    # # save prediction:
+    # if args.output_prediction_path is not None:
+    #     cur_results_path = Path(args.output_prediction_path)
+    #     if not cur_results_path.exists():
+    #         cur_results_path.mkdir(parents=True)
+    #     for key, item in r_dict.items():
+    #         common.save_jsonl(item['predictions'], cur_results_path / f"{key}.jsonl")
+
+    #     # avoid saving too many things
+    #     for key, item in r_dict.items():
+    #         del r_dict[key]['predictions']
+    #     common.save_json(r_dict, cur_results_path / "results_dict.json", indent=2)
 
 
 if __name__ == '__main__':

@@ -15,6 +15,7 @@ from transformers import AlbertTokenizer, AlbertForSequenceClassification
 from transformers import DistilBertTokenizer, DistilBertForSequenceClassification
 from transformers import BartTokenizer, BartForSequenceClassification
 from transformers import ElectraTokenizer, ElectraForSequenceClassification
+import pandas as pd
 
 from torch.utils.data import Dataset, DataLoader, DistributedSampler, RandomSampler, SequentialSampler
 import config
@@ -401,6 +402,7 @@ def train(local_rank, args):
     # debug = False
     # print("GPU:", gpu)
     # world_size = args.world_size
+    test_accuracy  = []
     args.global_rank = args.node_rank * args.gpus_per_node + local_rank
     args.local_rank = local_rank
     # args.warmup_steps = 20
@@ -464,6 +466,9 @@ def train(local_rank, args):
     weights_str = train_data_weights_str.split(',') if train_data_weights_str is not None else None
 
     eval_data_named_path = eval_data_str.split(',')
+    print("TRAIN AND EVAL DATA: ")
+    print(train_data_named_path)
+    print(eval_data_named_path)
 
     for named_path in train_data_named_path:
         ind = named_path.find(':')
@@ -533,6 +538,7 @@ def train(local_rank, args):
     estimated_training_size = len(training_list)
     print("Estimated training size:", estimated_training_size)
     # Estimate the training size ends:
+    #set_trace()
 
     # t_total = estimated_training_size // args.gradient_accumulation_steps * num_epoch
     # t_total = estimated_training_size * num_epoch // args.actual_train_batch_size
@@ -627,6 +633,7 @@ def train(local_rank, args):
 
     # print(f"Global Rank:{args.global_rank} ### ", 'Init!')
 
+    best_accuracy = -1
     for epoch in tqdm(range(num_epoch), desc="Epoch", disable=args.global_rank not in [-1, 0]):
         # Let's build up training dataset for this epoch
         training_list = []
@@ -731,32 +738,45 @@ def train(local_rank, args):
                         cur_eval_data_name = eval_data_name[i]
                         current_checkpoint_filename += \
                             f'|{cur_eval_data_name}#({round(r_dict[cur_eval_data_name]["acc"], 4)})'
-
+                        
+                        
+                        test_accuracy.append((global_step, cur_eval_data_name, r_dict[cur_eval_data_name]["acc"]))
+                        test_accuracy_df = pd.DataFrame(test_accuracy, columns = ['step', "dataset", "accuracy"])
+                        #print(f"CHECKPOINTS PATH: {checkpoints_path}")
+                        #test_accuracy_df.to_csv(str(checkpoints_path / "test_accuracy.csv"))
+                    
+                    
                     if not args.debug_mode:
                         # save model:
-                        model_output_dir = checkpoints_path / current_checkpoint_filename
+                        model_output_dir = checkpoints_path
                         if not model_output_dir.exists():
                             model_output_dir.mkdir()
                         model_to_save = (
                             model.module if hasattr(model, "module") else model
                         )  # Take care of distributed/parallel training
+                        #print(f"MODEL OUTPUT: {model_output_dir}")
+                        #test_accuracy_df.to_csv(str(model_output_dir / "test_accuracy.csv"))
+                        
+                        if r_dict[cur_eval_data_name]["anli_r1_dev"] > best_accuracy:
+                            print(f"SAVING MODEL ON EPOCH {epoch}")
+                            best_accuracy = r_dict[cur_eval_data_name]["acc"]
+                            torch.save(model_to_save.state_dict(), str(model_output_dir / "model.pt"))
+                            torch.save(optimizer.state_dict(), str(model_output_dir / "optimizer.pt"))
+                            torch.save(scheduler.state_dict(), str(model_output_dir / "scheduler.pt"))
 
-                        torch.save(model_to_save.state_dict(), str(model_output_dir / "model.pt"))
-                        torch.save(optimizer.state_dict(), str(model_output_dir / "optimizer.pt"))
-                        torch.save(scheduler.state_dict(), str(model_output_dir / "scheduler.pt"))
+                    # # save prediction:
+                    # if not args.debug_mode and args.save_prediction:
+                    #     print("SAVING PREDICTION")
+                    #     cur_results_path = prediction_path / current_checkpoint_filename
+                    #     if not cur_results_path.exists():
+                    #         cur_results_path.mkdir(parents=True)
+                    #     for key, item in r_dict.items():
+                    #         common.save_jsonl(item['predictions'], cur_results_path / f"{key}.jsonl")
 
-                    # save prediction:
-                    if not args.debug_mode and args.save_prediction:
-                        cur_results_path = prediction_path / current_checkpoint_filename
-                        if not cur_results_path.exists():
-                            cur_results_path.mkdir(parents=True)
-                        for key, item in r_dict.items():
-                            common.save_jsonl(item['predictions'], cur_results_path / f"{key}.jsonl")
-
-                        # avoid saving too many things
-                        for key, item in r_dict.items():
-                            del r_dict[key]['predictions']
-                        common.save_json(r_dict, cur_results_path / "results_dict.json", indent=2)
+                    #     # avoid saving too many things
+                    #     for key, item in r_dict.items():
+                    #         del r_dict[key]['predictions']
+                    #     common.save_json(r_dict, cur_results_path / "results_dict.json", indent=2)
 
                 if args.total_step > 0 and global_step == t_total:
                     # if we set total step and global step s t_total.
@@ -800,6 +820,7 @@ def train(local_rank, args):
 
             # save prediction:
             if not args.debug_mode and args.save_prediction:
+                print("SAVING PREDICTION")
                 cur_results_path = prediction_path / current_checkpoint_filename
                 if not cur_results_path.exists():
                     cur_results_path.mkdir(parents=True)
