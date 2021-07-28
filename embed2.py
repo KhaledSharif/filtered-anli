@@ -44,21 +44,22 @@ def save_embeddings(dataset, batch = 100):
 
     for i in np.arange(m):
         embedding = []
-        for j in np.arange(i*batch, min(i*batch + batch, len(train.index))):
-            tokenized_input_seq_pair = tokenizer.encode_plus(context[j], hypothesis[j],
-                                                         max_length=max_length,
-                                                         return_token_type_ids=True, truncation=True)
-            input_ids = torch.Tensor(tokenized_input_seq_pair['input_ids']).long().unsqueeze(0)
-            token_type_ids = torch.Tensor(tokenized_input_seq_pair['token_type_ids']).long().unsqueeze(0)
-            attention_mask = torch.Tensor(tokenized_input_seq_pair['attention_mask']).long().unsqueeze(0)
+        batch_index = np.arange(i*batch, min(i*batch + batch, len(train.index)))
+        tokenized_input_seq_pair = tokenizer.batch_encode_plus(context[batch_index].tolist(), hypothesis[batch_index].tolist(),
+                                                     padding=True,
+                                                     max_length=max_length,
+                                                     return_token_type_ids=True, truncation=True)
+        input_ids = torch.Tensor(tokenized_input_seq_pair['input_ids']).long().unsqueeze(0)
+        token_type_ids = torch.Tensor(tokenized_input_seq_pair['token_type_ids']).long().unsqueeze(0)
+        attention_mask = torch.Tensor(tokenized_input_seq_pair['attention_mask']).long().unsqueeze(0)
 
-            outputs = model(input_ids,
-                        attention_mask=attention_mask,
-                        token_type_ids=token_type_ids,
-                        labels=None)
-            # print((outputs[1][-1].shape))
-            embedding.append(outputs[1][-1].detach().numpy().astype(object))
-        np.save(outputpath+str(i), embedding) ## error!! dimension doesn't match due to varying seq_len
+        outputs = model(input_ids,
+                    attention_mask=attention_mask,
+                    token_type_ids=token_type_ids,
+                    labels=None)
+        print((outputs[0].shape))
+        embedding.append(outputs[1][-1].detach().numpy())
+        np.save(outputpath+str(i), embedding)
         print("Saved batch", i, "of size", len(embedding), "in the ./embedding_files directory. So far", min(i * batch + batch, len(train.index)), "examples saved...")
         # print(embedding)
 
