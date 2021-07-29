@@ -56,8 +56,13 @@ def save_embeddings(dataset, batch = 100):
                         attention_mask=attention_mask,
                         token_type_ids=token_type_ids,
                         labels=None)
-            # print((outputs[1][-1].shape))
-            embedding.append(outputs[1][-1].detach().numpy().astype(object))
+            # print((outputs[1][-1][:,0,:].shape))
+            hidden_states = outputs[1]
+            last_layer_state = hidden_states[-1]
+            pooled_last_layer = last_layer_state[:,0,:].detach().numpy()
+            pooled_last_layer = pooled_last_layer[0] # remove outer brackets (1, 1024) into (1024,)
+            embedding.append(pooled_last_layer)
+            # print(pooled_last_layer)
         np.save(outputpath+str(i), embedding) ## error!! dimension doesn't match due to varying seq_len
         print("Saved batch", i, "of size", len(embedding), "in the ./embedding_files directory. So far", min(i * batch + batch, len(train.index)), "examples saved...")
         # print(embedding)
@@ -94,7 +99,7 @@ def load_embeddings(dataset, batch = 100):
 
     print("loading ", m, " batches of embedding into a single list")
 
-    for i in np.arange(5):
+    for i in np.arange(m):
         batch_embeddings = np.load(loadpath+str(i)+".npy")
         embeddings.append(batch_embeddings)
         print("Batch", i, "loaded..")
@@ -109,11 +114,12 @@ def load_embeddings(dataset, batch = 100):
 
 
 if __name__ == '__main__':
-
     save_embeddings("R1")
     save_embeddings("R2")
     save_embeddings("R3")
     # x = load_embeddings("R1")
     # print(x)
+    # print(len(x))
+    # print(len(x[0]))
 
 
