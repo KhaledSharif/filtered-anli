@@ -757,7 +757,7 @@ def train(local_rank, args):
                         #print(f"MODEL OUTPUT: {model_output_dir}")
                         #test_accuracy_df.to_csv(str(model_output_dir / "test_accuracy.csv"))
                         
-                        if r_dict[cur_eval_data_name]["anli_r1_dev"] > best_accuracy:
+                        if r_dict[cur_eval_data_name]["acc"] > best_accuracy:
                             print(f"SAVING MODEL ON EPOCH {epoch}")
                             best_accuracy = r_dict[cur_eval_data_name]["acc"]
                             torch.save(model_to_save.state_dict(), str(model_output_dir / "model.pt"))
