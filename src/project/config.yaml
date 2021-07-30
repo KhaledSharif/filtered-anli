@@ -1,9 +1,0 @@
-2-aflite:
-  phi: './1-output.pt'  # input data path, must be loadable by torch.load
-  L: 'LinearSGD' # SVM or LinearSGD. SVM is very slow.
-  m: 64 # m means to try hypothesis on the training set, it must be large enough e.g. 10 or 64 to make AFLite not filtering out good data.
-  t: 50000 # training set size for each way of partitioning
-  tau: 0.75 # 0 will make the termination condition totally up to n
-  k: 10000 # k controlls the speed of the reduction
-  n: 0 # 0 will make the termination condition totally up to tau
-  output: './2-output.pt'  # output data path, it is loadable by torch.load
