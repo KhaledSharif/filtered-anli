@@ -16,7 +16,7 @@ from transformers import DistilBertTokenizer, DistilBertForSequenceClassificatio
 from transformers import BartTokenizer, BartForSequenceClassification
 from transformers import ElectraTokenizer, ElectraForSequenceClassification
 import pandas as pd
-
+import pdb
 from torch.utils.data import Dataset, DataLoader, DistributedSampler, RandomSampler, SequentialSampler
 import config
 from transformers import AdamW
@@ -634,6 +634,7 @@ def train(local_rank, args):
     # print(f"Global Rank:{args.global_rank} ### ", 'Init!')
 
     best_accuracy = -1
+    val_round_data = []
     for epoch in tqdm(range(num_epoch), desc="Epoch", disable=args.global_rank not in [-1, 0]):
         # Let's build up training dataset for this epoch
         training_list = []
@@ -757,6 +758,8 @@ def train(local_rank, args):
                         #print(f"MODEL OUTPUT: {model_output_dir}")
                         #test_accuracy_df.to_csv(str(model_output_dir / "test_accuracy.csv"))
                         
+                        val_round_data.append((epoch, cur_eval_data_name, r_dict[cur_eval_data_name]["acc"]))
+                        pdb.set_trace()
                         if r_dict[cur_eval_data_name]["acc"] > best_accuracy:
                             print(f"SAVING MODEL ON EPOCH {epoch}")
                             best_accuracy = r_dict[cur_eval_data_name]["acc"]
