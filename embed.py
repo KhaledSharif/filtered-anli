@@ -117,6 +117,7 @@ def load_embeddings(dataset, batch = 100):
 
 
 if __name__ == '__main__':
+
     save_embeddings("R1")
     save_embeddings("R2")
     save_embeddings("R3")
