@@ -64,7 +64,7 @@ def save_embeddings(dataset, batch = 100):
             # print(pooled_hidden_state.shape)
             pooled_hidden_state = pooled_hidden_state[0] # remove outer brackets (1, 1024) into (1024,)
             # print(pooled_hidden_state.shape)
-            embedding.append(pooled_hidden_state)
+            embedding.append(pooled_hidden_state.detach().numpy())
             # print(pooled_last_layer)
         np.save(outputpath+str(i), embedding) ## error!! dimension doesn't match due to varying seq_len
         print("Saved batch", i, "of size", len(embedding), "in the ./embedding_files directory. So far", min(i * batch + batch, len(train.index)), "examples saved...")
