@@ -634,7 +634,8 @@ def train(local_rank, args):
     # print(f"Global Rank:{args.global_rank} ### ", 'Init!')
 
     best_accuracy = -1
-    val_round_data = []
+    val_stats = []
+    train_stats = []
     for epoch in tqdm(range(num_epoch), desc="Epoch", disable=args.global_rank not in [-1, 0]):
         # Let's build up training dataset for this epoch
         training_list = []
@@ -673,7 +674,9 @@ def train(local_rank, args):
                 train_sampler.set_epoch(epoch)  # setup the epoch to ensure random sampling at each epoch
             else:
                 train_sampler.set_epoch(epoch + args.sampler_seed)
-
+        total_train_loss = 0.0
+        total_train_correct = 0
+        total_train_examples = 0
         for forward_step, batch in enumerate(tqdm(train_dataloader, desc="Iteration",
                                                   disable=args.global_rank not in [-1, 0]), 0):
             model.train()
@@ -689,7 +692,12 @@ def train(local_rank, args):
                                 attention_mask=batch['attention_mask'],
                                 token_type_ids=batch['token_type_ids'],
                                 labels=batch['y'])
+            pred = torch.argmax(outputs.logits, axis=1)
+            
             loss, logits = outputs[:2]
+            total_train_loss += abs(float(loss))
+            total_train_correct += int(torch.sum(pred==batch['y']))
+            total_train_examples += len(batch['uid'])
             # print(debug_node_info(args), loss, logits, batch['uid'])
             # print(debug_node_info(args), loss, batch['uid'])
 
@@ -730,6 +738,8 @@ def train(local_rank, args):
 
                         evaluation_dataset(args, cur_eval_dataloader, cur_eval_data_list, model, r_dict,
                                            eval_name=cur_eval_data_name)
+                        val_stats.append((global_step, cur_eval_data_name, r_dict[cur_eval_data_name]["acc"], r_dict[cur_eval_data_name]["loss"]))
+                        print("VAL STATS",(global_step, cur_eval_data_name, r_dict[cur_eval_data_name]["acc"], r_dict[cur_eval_data_name]["loss"]))    
 
                     # saving checkpoints
                     current_checkpoint_filename = \
@@ -739,14 +749,7 @@ def train(local_rank, args):
                         cur_eval_data_name = eval_data_name[i]
                         current_checkpoint_filename += \
                             f'|{cur_eval_data_name}#({round(r_dict[cur_eval_data_name]["acc"], 4)})'
-                        
-                        
-                        test_accuracy.append((global_step, cur_eval_data_name, r_dict[cur_eval_data_name]["acc"]))
-                        test_accuracy_df = pd.DataFrame(test_accuracy, columns = ['step', "dataset", "accuracy"])
-                        #print(f"CHECKPOINTS PATH: {checkpoints_path}")
-                        #test_accuracy_df.to_csv(str(checkpoints_path / "test_accuracy.csv"))
-                    
-                    
+               
                     if not args.debug_mode:
                         # save model:
                         model_output_dir = checkpoints_path
@@ -755,17 +758,13 @@ def train(local_rank, args):
                         model_to_save = (
                             model.module if hasattr(model, "module") else model
                         )  # Take care of distributed/parallel training
-                        #print(f"MODEL OUTPUT: {model_output_dir}")
-                        #test_accuracy_df.to_csv(str(model_output_dir / "test_accuracy.csv"))
                         
-                        val_round_data.append((epoch, cur_eval_data_name, r_dict[cur_eval_data_name]["acc"]))
-                        pdb.set_trace()
                         if r_dict[cur_eval_data_name]["acc"] > best_accuracy:
                             print(f"SAVING MODEL ON EPOCH {epoch}")
                             best_accuracy = r_dict[cur_eval_data_name]["acc"]
                             torch.save(model_to_save.state_dict(), str(model_output_dir / "model.pt"))
-                            torch.save(optimizer.state_dict(), str(model_output_dir / "optimizer.pt"))
-                            torch.save(scheduler.state_dict(), str(model_output_dir / "scheduler.pt"))
+                            #torch.save(optimizer.state_dict(), str(model_output_dir / "optimizer.pt"))
+                            #torch.save(scheduler.state_dict(), str(model_output_dir / "scheduler.pt"))
 
                     # # save prediction:
                     # if not args.debug_mode and args.save_prediction:
@@ -785,6 +784,10 @@ def train(local_rank, args):
                     # if we set total step and global step s t_total.
                     is_finished = True
                     break
+        train_loss = total_train_loss / total_train_examples
+        train_acc = total_train_correct / total_train_examples
+        print("train loss",(global_step, train_loss, train_acc))
+        train_stats.append((global_step, train_loss, train_acc))
 
         # End of epoch evaluation.
         if args.global_rank in [-1, 0] and args.total_step <= 0:
@@ -808,18 +811,18 @@ def train(local_rank, args):
                 current_checkpoint_filename += \
                     f'|{cur_eval_data_name}#({round(r_dict[cur_eval_data_name]["acc"], 4)})'
 
-            if not args.debug_mode:
-                # save model:
-                model_output_dir = checkpoints_path / current_checkpoint_filename
-                if not model_output_dir.exists():
-                    model_output_dir.mkdir()
-                model_to_save = (
-                    model.module if hasattr(model, "module") else model
-                )  # Take care of distributed/parallel training
+            # if not args.debug_mode:
+            #     # save model:
+            #     model_output_dir = checkpoints_path / current_checkpoint_filename
+            #     if not model_output_dir.exists():
+            #         model_output_dir.mkdir()
+            #     model_to_save = (
+            #         model.module if hasattr(model, "module") else model
+            #     )  # Take care of distributed/parallel training
 
-                torch.save(model_to_save.state_dict(), str(model_output_dir / "model.pt"))
-                torch.save(optimizer.state_dict(), str(model_output_dir / "optimizer.pt"))
-                torch.save(scheduler.state_dict(), str(model_output_dir / "scheduler.pt"))
+            #     torch.save(model_to_save.state_dict(), str(model_output_dir / "model.pt"))
+            #     torch.save(optimizer.state_dict(), str(model_output_dir / "optimizer.pt"))
+            #     torch.save(scheduler.state_dict(), str(model_output_dir / "scheduler.pt"))
 
             # save prediction:
             if not args.debug_mode and args.save_prediction:
@@ -837,6 +840,10 @@ def train(local_rank, args):
 
         if is_finished:
             break
+    train_stats = pd.DataFrame(train_stats, columns = ['global_step', 'train_loss', 'train_accuracy'])
+    val_stats = pd.DataFrame(val_stats, columns = ['global_step', 'eval_dataset', 'val_accuracy', 'val_loss'])
+    train_stats.to_csv(cur_results_path / "train_stats.csv", index=False)
+    val_stats.to_csv(cur_results_path / "val_stats.csv", index=False)
 
 
 id2label = {
@@ -862,7 +869,7 @@ def count_acc(gt_list, pred_list):
 
 def evaluation_dataset(args, eval_dataloader, eval_list, model, r_dict, eval_name):
     # r_dict = dict()
-    pred_output_list = eval_model(model, eval_dataloader, args.global_rank, args)
+    pred_output_list, eval_loss = eval_model(model, eval_dataloader, args.global_rank, args)
     predictions = pred_output_list
     hit, total = count_acc(eval_list, pred_output_list)
 
@@ -873,6 +880,7 @@ def evaluation_dataset(args, eval_dataloader, eval_list, model, r_dict, eval_nam
         'correct_count': hit,
         'total_count': total,
         'predictions': predictions,
+        'loss':eval_loss
     }
 
 
@@ -884,6 +892,9 @@ def eval_model(model, dev_dataloader, device_num, args):
     pred_list = []
     logits_list = []
 
+    
+    total_eval_loss = 0.0
+    total_eval_examples = 0
     with torch.no_grad():
         for i, batch in enumerate(dev_dataloader, 0):
             batch = move_to_device(batch, device_num)
@@ -899,6 +910,8 @@ def eval_model(model, dev_dataloader, device_num, args):
                                 labels=batch['y'])
 
             loss, logits = outputs[:2]
+            total_eval_loss += abs(float(loss))
+            total_eval_examples += len(batch['uid'])
 
             uid_list.extend(list(batch['uid']))
             y_list.extend(batch['y'].tolist())
@@ -917,7 +930,8 @@ def eval_model(model, dev_dataloader, device_num, args):
 
         result_items_list.append(r_item)
 
-    return result_items_list
+    avg_eval_loss = total_eval_loss / total_eval_examples
+    return result_items_list, avg_eval_loss
 
 
 def debug_node_info(args):
