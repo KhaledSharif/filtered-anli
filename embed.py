@@ -34,10 +34,11 @@ def save_embeddings(dataset, batch = 100):
     context = train["context"]
     hypothesis = train["hypothesis"]
 
-    hg_model_hub_name = "ynie/roberta-large-snli_mnli_fever_anli_R1_R2_R3-nli"
+    hg_model_hub_name = "roberta-large-mnli"
     tokenizer = AutoTokenizer.from_pretrained(hg_model_hub_name)
     config = AutoConfig.from_pretrained(hg_model_hub_name, output_hidden_states=True)
     model = AutoModelForSequenceClassification.from_pretrained(hg_model_hub_name, config = config)
+
     # print(model.config.output_hidden_states)
     m = math.ceil(len(train.index)/batch)
     print("Number of batches of embeddings to produce for this dataset:", m)
@@ -57,11 +58,13 @@ def save_embeddings(dataset, batch = 100):
                         token_type_ids=token_type_ids,
                         labels=None)
             # print((outputs[1][-1][:,0,:].shape))
-            hidden_states = outputs[1]
-            last_layer_state = hidden_states[-1]
-            pooled_last_layer = last_layer_state[:,0,:].detach().numpy()
-            pooled_last_layer = pooled_last_layer[0] # remove outer brackets (1, 1024) into (1024,)
-            embedding.append(pooled_last_layer)
+            hidden_states = outputs[1][-1]
+            # last_layer_state = hidden_states[-1]
+            pooled_hidden_state = model.roberta.pooler.forward(hidden_states)
+            # print(pooled_hidden_state.shape)
+            pooled_hidden_state = pooled_hidden_state[0] # remove outer brackets (1, 1024) into (1024,)
+            # print(pooled_hidden_state.shape)
+            embedding.append(pooled_hidden_state)
             # print(pooled_last_layer)
         np.save(outputpath+str(i), embedding) ## error!! dimension doesn't match due to varying seq_len
         print("Saved batch", i, "of size", len(embedding), "in the ./embedding_files directory. So far", min(i * batch + batch, len(train.index)), "examples saved...")
