@@ -11,6 +11,8 @@
   k: 100 # k controlls the speed of the reduction
   n: 10000 # 0 will make the termination condition totally up to tau
   output: './2-output.pt'  # output data path, it is loadable by torch.load
+3-dedup:
+  dataset: 'R1'
 3-train:
   input: './2-output.pt'
   dataset: 'R1'

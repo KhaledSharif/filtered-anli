@@ -1,3 +1,4 @@
+from os import remove
 import torch
 import yaml
 import pandas as pd
@@ -21,14 +22,18 @@ elif dataset == "R3":
     inputpath = './data/anli_v1.0/R3/train.jsonl'
     outputpath = "./embedding_files/R3/batch-"
 
-import json
-
 result = []
+removed = []
 with open(inputpath) as f:
     lines = f.readlines()
     for i, line in enumerate(lines):
         if filter[i]:
             result.append(line)
+        else:
+            removed.append(line)
 print(len(result))
 with open(inputpath + '_filtered.jsonl', 'w+') as f:
     f.writelines(result)
+
+with open(inputpath + '_removed.jsonl', 'w+') as f:
+    f.writelines(removed)
