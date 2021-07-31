@@ -13,3 +13,4 @@
   output: './2-output.pt'  # output data path, it is loadable by torch.load
 3-train:
   input: './2-output.pt'
+  dataset: 'R1'
