@@ -103,6 +103,7 @@ def cross_validation(L, S: torch.Tensor, t: int, m: int, use_numpy=False, monte_
                 E[selected_for_prediction, 0] += correct.astype(np.int8)
                 E[selected_for_prediction, 1] += 1
             else:
+                # validation set, training set
                 Tj, S_Tj = torch.split(S, (S.shape[0] - t, t))
                 # Tj is validation set, S_Tj is training set
                 selected_for_prediction = indices[:S.shape[0] - t]
@@ -133,12 +134,11 @@ def _linearSGD(X, y, X_validation, y_validation):
     criterion = torch.nn.CrossEntropyLoss()  # this contains a LogSoftmax step
     epoch = 10
     for _ in range(epoch):
-        # todo: potentially make batching to improve learning.
         outputs = model(X)
         loss = criterion(outputs, y)
         loss.backward()
         optimizer.step()
-    
+
     with torch.no_grad():
         outputs = model(X_validation)
         _, predicted = torch.max(outputs.data, 1)
