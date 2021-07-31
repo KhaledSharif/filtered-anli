@@ -842,8 +842,8 @@ def train(local_rank, args):
             break
     train_stats = pd.DataFrame(train_stats, columns = ['global_step', 'train_loss', 'train_accuracy'])
     val_stats = pd.DataFrame(val_stats, columns = ['global_step', 'eval_dataset', 'val_accuracy', 'val_loss'])
-    train_stats.to_csv(cur_results_path / "train_stats.csv", index=False)
-    val_stats.to_csv(cur_results_path / "val_stats.csv", index=False)
+    train_stats.to_csv(prediction_path / "train_stats.csv", index=False)
+    val_stats.to_csv(prediction_path / "val_stats.csv", index=False)
 
 
 id2label = {
