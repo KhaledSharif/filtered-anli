@@ -182,6 +182,9 @@ registered_path = {
     'anli_r1_40pct_train': config.PRO_ROOT / "data/anli_v1.0/R1/train.jsonl_filtered.jsonl",
     'anli_r1_40pct_dev': config.PRO_ROOT / "data/anli_v1.0/R1/dev.jsonl",
     'anli_r1_40pct_test': config.PRO_ROOT / "data/anli_v1.0/R1/test.jsonl",
+
+    'anli_r1_63pct_train': config.PRO_ROOT / "data/anli_v1.0/R1/train.jsonl_filtered_10786.jsonl",
+    'anli_r1_78pct_train': config.PRO_ROOT / "data/anli_v1.0/R1/train.jsonl_filtered_13250.jsonl"
 }
 
 nli_label2index = {
