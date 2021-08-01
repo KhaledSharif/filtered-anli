@@ -1,4 +1,4 @@
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
+from transformers import AutoTokenizer, AutoModelForSequenceClassification, AutoConfig
 import torch
 import pandas as pd
 import time
@@ -34,10 +34,12 @@ def save_embeddings(dataset, batch = 100):
     context = train["context"]
     hypothesis = train["hypothesis"]
 
-    hg_model_hub_name = "ynie/roberta-large-snli_mnli_fever_anli_R1_R2_R3-nli"
+    hg_model_hub_name = "roberta-large-mnli"
     tokenizer = AutoTokenizer.from_pretrained(hg_model_hub_name)
-    model = AutoModelForSequenceClassification.from_pretrained(hg_model_hub_name)
-#
+    config = AutoConfig.from_pretrained(hg_model_hub_name, output_hidden_states=True)
+    model = AutoModelForSequenceClassification.from_pretrained(hg_model_hub_name, config = config)
+
+    # print(model.config.output_hidden_states)
     m = math.ceil(len(train.index)/batch)
     print("Number of batches of embeddings to produce for this dataset:", m)
 
@@ -55,9 +57,16 @@ def save_embeddings(dataset, batch = 100):
                         attention_mask=attention_mask,
                         token_type_ids=token_type_ids,
                         labels=None)
-            # print(outputs[0][0].detach().numpy())
-            embedding.append(outputs[0][0].detach().numpy())
-        np.save(outputpath+str(i), embedding)
+            # print((outputs[1][-1][:,0,:].shape))
+            hidden_states = outputs[1][-1]
+            # last_layer_state = hidden_states[-1]
+            pooled_hidden_state = model.roberta.pooler.forward(hidden_states)
+            # print(pooled_hidden_state.shape)
+            pooled_hidden_state = pooled_hidden_state[0] # remove outer brackets (1, 1024) into (1024,)
+            # print(pooled_hidden_state.shape)
+            embedding.append(pooled_hidden_state.detach().numpy())
+            # print(pooled_last_layer)
+        np.save(outputpath+str(i), embedding) ## error!! dimension doesn't match due to varying seq_len
         print("Saved batch", i, "of size", len(embedding), "in the ./embedding_files directory. So far", min(i * batch + batch, len(train.index)), "examples saved...")
         # print(embedding)
 
@@ -93,7 +102,7 @@ def load_embeddings(dataset, batch = 100):
 
     print("loading ", m, " batches of embedding into a single list")
 
-    for i in np.arange(5):
+    for i in np.arange(m):
         batch_embeddings = np.load(loadpath+str(i)+".npy")
         embeddings.append(batch_embeddings)
         print("Batch", i, "loaded..")
@@ -110,7 +119,11 @@ def load_embeddings(dataset, batch = 100):
 if __name__ == '__main__':
 
     save_embeddings("R1")
-    x = load_embeddings("R1")
+    save_embeddings("R2")
+    save_embeddings("R3")
+    # x = load_embeddings("R1")
     # print(x)
+    # print(len(x))
+    # print(len(x[0]))
 
 

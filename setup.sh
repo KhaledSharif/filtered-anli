@@ -1,5 +1,4 @@
 #!/bin/bash
-
 # Copyright (c) Facebook, Inc. and its affiliates.
 #
 # This source code is licensed under Creative Commons-Non Commercial 4.0 found in the
