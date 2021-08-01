@@ -261,19 +261,11 @@ def build_eval_dataset_loader_and_sampler(d_list, data_transformer, batching_sch
 def sample_data_list(d_list, ratio):
     if ratio <= 0:
         raise ValueError("Invalid training weight ratio. Please change --train_weights.")
-    upper_int = int(math.ceil(ratio))
-    if upper_int == 1:
-        return d_list # if ratio is 1 then we just return the data list
-    else:
-        sampled_d_list = []
-        for _ in range(upper_int):
-            sampled_d_list.extend(copy.deepcopy(d_list))
-        if np.isclose(ratio, upper_int):
-            return sampled_d_list
-        else:
-            sampled_length = int(ratio * len(d_list))
-            random.shuffle(sampled_d_list)
-            return sampled_d_list[:sampled_length]
+   
+    sampled_d_list = copy.deepcopy(d_list)
+    sampled_length = int(ratio * len(d_list))
+    random.shuffle(sampled_d_list)
+    return sampled_d_list[:sampled_length]
 
 
 def main():
